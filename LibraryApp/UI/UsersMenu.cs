@@ -1,17 +1,13 @@
 using LibraryApp.Models;
+using LibraryApp.Services;
 
 namespace LibraryApp.UI;
 
 public static class UsersMenu
 {
-    private static readonly List<User> _sampleUsers = new()
-    {
-        new User(1, "Ana Martínez", "1001234567", "ana@email.com", "311-111-1111"),
-        new User(2, "Carlos Pérez", "1007654321", "carlos@email.com", "322-222-2222")
-        {
-            IsActive = false,
-        },
-    };
+    private static UserService _service = null!;
+
+    public static void Init(UserService service) => _service = service;
 
     public static void Show()
     {
@@ -22,20 +18,19 @@ public static class UsersMenu
             ConsoleHelper.PrintSectionHeader(
                 "👤",
                 "GESTIÓN DE USUARIOS",
-                "Administra los usuarios del sistema"
+                $"Total: {_service.TotalUsers()}  |  🟢 {_service.TotalActive()} activos  |  🔴 {_service.TotalInactive()} inactivos"
             );
 
             ConsoleHelper.PrintMenuOption("1", "➕", "Registrar usuario");
             ConsoleHelper.PrintMenuOption("2", "📋", "Listar usuarios");
-            ConsoleHelper.PrintMenuOption("3", "🔎", "Ver detalle (por ID / Documento)");
+            ConsoleHelper.PrintMenuOption("3", "🔎", "Ver detalle (por ID)");
             ConsoleHelper.PrintMenuOption("4", "✏️ ", "Actualizar usuario");
             ConsoleHelper.PrintMenuOption("5", "🗑️ ", "Eliminar usuario");
             ConsoleHelper.PrintBackOption();
 
             ConsoleHelper.PrintPrompt("Selecciona una opción [0-5]");
-            int option = ConsoleHelper.ReadInt(0, 5);
-
-            switch (option)
+            int opt = ConsoleHelper.ReadInt(0, 5);
+            switch (opt)
             {
                 case 1:
                     RegisterUser();
@@ -62,20 +57,46 @@ public static class UsersMenu
     private static void RegisterUser()
     {
         ConsoleHelper.PrintAppHeader();
-        ConsoleHelper.PrintSectionHeader("➕", "REGISTRAR USUARIO");
-        ConsoleHelper.PrintStub("RegisterUser — Se implementará con Service en EV08");
+        ConsoleHelper.PrintSectionHeader("➕", "REGISTRAR NUEVO USUARIO");
+        ConsoleHelper.PrintPrompt("Nombre completo");
+        string name = Console.ReadLine() ?? "";
+        ConsoleHelper.PrintPrompt("Documento de identidad");
+        string doc = Console.ReadLine() ?? "";
+        ConsoleHelper.PrintPrompt("Email");
+        string email = Console.ReadLine() ?? "";
+        ConsoleHelper.PrintPrompt("Teléfono");
+        string phone = Console.ReadLine() ?? "";
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(doc))
+        {
+            ConsoleHelper.PrintError("Nombre y documento son obligatorios.");
+            ConsoleHelper.PressAnyKey();
+            return;
+        }
+        var user = new User
+        {
+            Name = name,
+            Document = doc,
+            Email = email,
+            Phone = phone,
+        };
+        _service.Add(user);
+        ConsoleHelper.PrintSuccess($"Usuario registrado con ID [{user.Id:D3}].");
         ConsoleHelper.PressAnyKey();
     }
 
     private static void ListUsers()
     {
         ConsoleHelper.PrintAppHeader();
-        ConsoleHelper.PrintSectionHeader("📋", "LISTAR USUARIOS", $"Total: {_sampleUsers.Count}");
-        foreach (var user in _sampleUsers)
-        {
-            Console.ForegroundColor = user.IsActive ? ConsoleColor.Green : ConsoleColor.DarkGray;
-            Console.WriteLine($"  {user.ShortSummary()}");
-        }
+        var users = _service.GetSortedByName();
+        ConsoleHelper.PrintSectionHeader("📋", "TODOS LOS USUARIOS", $"Total: {users.Count}");
+        if (users.Count == 0)
+            ConsoleHelper.PrintInfo("No hay usuarios registrados.");
+        else
+            foreach (var u in users)
+            {
+                Console.ForegroundColor = u.IsActive ? ConsoleColor.Green : ConsoleColor.DarkGray;
+                Console.WriteLine($"  {u.ShortSummary()}");
+            }
         Console.ResetColor();
         ConsoleHelper.PressAnyKey();
     }
@@ -84,18 +105,18 @@ public static class UsersMenu
     {
         ConsoleHelper.PrintAppHeader();
         ConsoleHelper.PrintSectionHeader("🔎", "VER DETALLE DE USUARIO");
-        ConsoleHelper.PrintPrompt("Ingresa el ID del usuario");
+        ConsoleHelper.PrintPrompt("ID del usuario");
         if (int.TryParse(Console.ReadLine(), out int id))
         {
-            var user = _sampleUsers.Find(u => u.Id == id);
-            if (user != null)
+            var u = _service.FindById(id);
+            if (u != null)
             {
                 Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.WriteLine(user.FullDetail());
+                Console.WriteLine(u.FullDetail());
                 Console.ResetColor();
             }
             else
-                ConsoleHelper.PrintError($"No se encontró usuario con ID {id}.");
+                ConsoleHelper.PrintError("Usuario no encontrado.");
         }
         else
             ConsoleHelper.PrintError("ID inválido.");
@@ -110,24 +131,63 @@ public static class UsersMenu
             ConsoleHelper.PrintAppHeader();
             ConsoleHelper.PrintSectionHeader("✏️", "ACTUALIZAR USUARIO");
             ConsoleHelper.PrintMenuOption("1", "📝", "Editar nombre");
-            ConsoleHelper.PrintMenuOption("2", "📞", "Editar contacto");
+            ConsoleHelper.PrintMenuOption("2", "📞", "Editar contacto (email / teléfono)");
             ConsoleHelper.PrintMenuOption("3", "🔘", "Activar / Desactivar");
             ConsoleHelper.PrintBackOption();
-
             ConsoleHelper.PrintPrompt("Selecciona una opción [0-3]");
             int opt = ConsoleHelper.ReadInt(0, 3);
             switch (opt)
             {
                 case 1:
-                    ConsoleHelper.PrintStub("EditUserName");
+                    ConsoleHelper.PrintAppHeader();
+                    ConsoleHelper.PrintSectionHeader("📝", "EDITAR NOMBRE");
+                    ConsoleHelper.PrintPrompt("ID");
+                    if (!int.TryParse(Console.ReadLine(), out int id1))
+                        break;
+                    ConsoleHelper.PrintPrompt("Nuevo nombre");
+                    string name = Console.ReadLine() ?? "";
+                    if (_service.UpdateName(id1, name))
+                        ConsoleHelper.PrintSuccess("Nombre actualizado.");
+                    else
+                        ConsoleHelper.PrintError("Usuario no encontrado.");
                     ConsoleHelper.PressAnyKey();
                     break;
                 case 2:
-                    ConsoleHelper.PrintStub("EditUserContact");
+                    ConsoleHelper.PrintAppHeader();
+                    ConsoleHelper.PrintSectionHeader("📞", "EDITAR CONTACTO");
+                    ConsoleHelper.PrintPrompt("ID");
+                    if (!int.TryParse(Console.ReadLine(), out int id2))
+                        break;
+                    ConsoleHelper.PrintPrompt("Nuevo email");
+                    string email = Console.ReadLine() ?? "";
+                    ConsoleHelper.PrintPrompt("Nuevo teléfono");
+                    string phone = Console.ReadLine() ?? "";
+                    if (_service.UpdateContact(id2, email, phone))
+                        ConsoleHelper.PrintSuccess("Contacto actualizado.");
+                    else
+                        ConsoleHelper.PrintError("Usuario no encontrado.");
                     ConsoleHelper.PressAnyKey();
                     break;
                 case 3:
-                    ConsoleHelper.PrintStub("ToggleUserActiveStatus");
+                    ConsoleHelper.PrintAppHeader();
+                    ConsoleHelper.PrintSectionHeader("🔘", "ACTIVAR / DESACTIVAR");
+                    ConsoleHelper.PrintPrompt("ID");
+                    if (!int.TryParse(Console.ReadLine(), out int id3))
+                        break;
+                    var u = _service.FindById(id3);
+                    if (u == null)
+                    {
+                        ConsoleHelper.PrintError("Usuario no encontrado.");
+                        ConsoleHelper.PressAnyKey();
+                        break;
+                    }
+                    ConsoleHelper.PrintInfo(
+                        $"Estado actual: {(u.IsActive ? "🟢 Activo" : "🔴 Inactivo")}"
+                    );
+                    if (_service.ToggleActive(id3))
+                        ConsoleHelper.PrintSuccess(
+                            $"Estado cambiado a: {(u.IsActive ? "🟢 Activo" : "🔴 Inactivo")}"
+                        );
                     ConsoleHelper.PressAnyKey();
                     break;
                 case 0:
@@ -141,8 +201,33 @@ public static class UsersMenu
     {
         ConsoleHelper.PrintAppHeader();
         ConsoleHelper.PrintSectionHeader("🗑️", "ELIMINAR USUARIO");
-        ConsoleHelper.PrintStub("DeleteUser — Se implementará con Service en EV08");
-        ConsoleHelper.PrintWarning("Validación: No permitir si tiene préstamos activos.");
+        ConsoleHelper.PrintPrompt("ID del usuario");
+        if (!int.TryParse(Console.ReadLine(), out int id))
+        {
+            ConsoleHelper.PrintError("ID inválido.");
+            ConsoleHelper.PressAnyKey();
+            return;
+        }
+        var u = _service.FindById(id);
+        if (u == null)
+        {
+            ConsoleHelper.PrintError("Usuario no encontrado.");
+            ConsoleHelper.PressAnyKey();
+            return;
+        }
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine(u.FullDetail());
+        Console.ResetColor();
+        if (ConsoleHelper.AskConfirmation("¿Confirmas eliminar este usuario?"))
+        {
+            // hasActiveLoans = false por ahora — LoanService lo valida en EV08 conectado
+            if (_service.Remove(id, false))
+                ConsoleHelper.PrintSuccess("Usuario eliminado.");
+            else
+                ConsoleHelper.PrintError("No se pudo eliminar.");
+        }
+        else
+            ConsoleHelper.PrintInfo("Operación cancelada.");
         ConsoleHelper.PressAnyKey();
     }
 }

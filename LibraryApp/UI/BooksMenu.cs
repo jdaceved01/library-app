@@ -1,40 +1,13 @@
 using LibraryApp.Models;
+using LibraryApp.Services;
 
 namespace LibraryApp.UI;
 
 public static class BooksMenu
 {
-    // Datos de prueba — serán reemplazados por el Service en EV08
-    private static readonly List<Book> _sampleBooks = new()
-    {
-        new Book(
-            1,
-            "Cien Años de Soledad",
-            "Gabriel García Márquez",
-            "978-0-06-088328-7",
-            1967,
-            "Novela"
-        ),
-        new Book(
-            2,
-            "El Principito",
-            "Antoine de Saint-Exupéry",
-            "978-0-15-601219-5",
-            1943,
-            "Fábula"
-        )
-        {
-            IsAvailable = false,
-        },
-        new Book(
-            3,
-            "Don Quijote de la Mancha",
-            "Miguel de Cervantes",
-            "978-84-376-0494-7",
-            1605,
-            "Clásico"
-        ),
-    };
+    private static BookService _service = null!;
+
+    public static void Init(BookService service) => _service = service;
 
     public static void Show()
     {
@@ -45,20 +18,19 @@ public static class BooksMenu
             ConsoleHelper.PrintSectionHeader(
                 "📖",
                 "GESTIÓN DE LIBROS",
-                "Administra el catálogo de la biblioteca"
+                $"Catálogo: {_service.TotalBooks()} libros  |  ✅ {_service.TotalAvailable()} disponibles  |  🔄 {_service.TotalBorrowed()} prestados"
             );
 
             ConsoleHelper.PrintMenuOption("1", "➕", "Registrar libro");
             ConsoleHelper.PrintMenuOption("2", "📋", "Listar libros");
-            ConsoleHelper.PrintMenuOption("3", "🔎", "Ver detalle de un libro (por ID / ISBN)");
+            ConsoleHelper.PrintMenuOption("3", "🔎", "Ver detalle (por ID)");
             ConsoleHelper.PrintMenuOption("4", "✏️ ", "Actualizar libro");
             ConsoleHelper.PrintMenuOption("5", "🗑️ ", "Eliminar libro");
             ConsoleHelper.PrintBackOption();
 
             ConsoleHelper.PrintPrompt("Selecciona una opción [0-5]");
-            int option = ConsoleHelper.ReadInt(0, 5);
-
-            switch (option)
+            int opt = ConsoleHelper.ReadInt(0, 5);
+            switch (opt)
             {
                 case 1:
                     RegisterBook();
@@ -85,9 +57,38 @@ public static class BooksMenu
     private static void RegisterBook()
     {
         ConsoleHelper.PrintAppHeader();
-        ConsoleHelper.PrintSectionHeader("➕", "REGISTRAR LIBRO");
-        ConsoleHelper.PrintStub("RegisterBook — Se implementará con Service en EV08");
-        ConsoleHelper.PrintInfo("Campos: Título, Autor, ISBN, Año, Categoría.");
+        ConsoleHelper.PrintSectionHeader("➕", "REGISTRAR NUEVO LIBRO");
+
+        ConsoleHelper.PrintPrompt("Título");
+        string title = Console.ReadLine() ?? "";
+        ConsoleHelper.PrintPrompt("Autor");
+        string author = Console.ReadLine() ?? "";
+        ConsoleHelper.PrintPrompt("ISBN");
+        string isbn = Console.ReadLine() ?? "";
+
+        ConsoleHelper.PrintPrompt("Año de publicación");
+        int.TryParse(Console.ReadLine(), out int year);
+
+        ConsoleHelper.PrintPrompt("Categoría");
+        string category = Console.ReadLine() ?? "";
+
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(author))
+        {
+            ConsoleHelper.PrintError("Título y autor son obligatorios.");
+            ConsoleHelper.PressAnyKey();
+            return;
+        }
+
+        var book = new Book
+        {
+            Title = title,
+            Author = author,
+            Isbn = isbn,
+            Year = year,
+            Category = category,
+        };
+        _service.Add(book);
+        ConsoleHelper.PrintSuccess($"Libro registrado correctamente con ID [{book.Id:D3}].");
         ConsoleHelper.PressAnyKey();
     }
 
@@ -97,24 +98,36 @@ public static class BooksMenu
         while (running)
         {
             ConsoleHelper.PrintAppHeader();
-            ConsoleHelper.PrintSectionHeader("📋", "LISTAR LIBROS", "Elige el filtro");
-            ConsoleHelper.PrintMenuOption("1", "📚", "Listar todos");
-            ConsoleHelper.PrintMenuOption("2", "✅", "Listar disponibles");
-            ConsoleHelper.PrintMenuOption("3", "🔄", "Listar prestados");
+            ConsoleHelper.PrintSectionHeader("📋", "LISTAR LIBROS");
+            ConsoleHelper.PrintMenuOption("1", "📚", "Todos los libros");
+            ConsoleHelper.PrintMenuOption("2", "✅", "Disponibles");
+            ConsoleHelper.PrintMenuOption("3", "🔄", "Prestados");
+            ConsoleHelper.PrintMenuOption("4", "🔤", "Ordenados por título");
+            ConsoleHelper.PrintMenuOption("5", "📅", "Ordenados por año");
             ConsoleHelper.PrintBackOption();
 
-            ConsoleHelper.PrintPrompt("Selecciona una opción [0-3]");
-            int opt = ConsoleHelper.ReadInt(0, 3);
+            ConsoleHelper.PrintPrompt("Selecciona una opción [0-5]");
+            int opt = ConsoleHelper.ReadInt(0, 5);
             switch (opt)
             {
                 case 1:
-                    ListBooksAll();
+                    PrintBookList(_service.GetAll(), "TODOS LOS LIBROS");
                     break;
                 case 2:
-                    ListBooksAvailable();
+                    PrintBookList(
+                        _service.GetAvailable(),
+                        "LIBROS DISPONIBLES",
+                        ConsoleColor.Green
+                    );
                     break;
                 case 3:
-                    ListBooksBorrowed();
+                    PrintBookList(_service.GetBorrowed(), "LIBROS PRESTADOS", ConsoleColor.Yellow);
+                    break;
+                case 4:
+                    PrintBookList(_service.GetSortedByTitle(), "ORDENADOS POR TÍTULO");
+                    break;
+                case 5:
+                    PrintBookList(_service.GetSortedByYear(), "ORDENADOS POR AÑO");
                     break;
                 case 0:
                     running = false;
@@ -123,48 +136,27 @@ public static class BooksMenu
         }
     }
 
-    private static void ListBooksAll()
+    private static void PrintBookList(
+        List<Book> books,
+        string title,
+        ConsoleColor color = ConsoleColor.White
+    )
     {
         ConsoleHelper.PrintAppHeader();
-        ConsoleHelper.PrintSectionHeader(
-            "📚",
-            "TODOS LOS LIBROS",
-            $"Total: {_sampleBooks.Count} libros"
-        );
-        foreach (var book in _sampleBooks)
+        ConsoleHelper.PrintSectionHeader("📚", title, $"Total: {books.Count}");
+        if (books.Count == 0)
         {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine($"  {book.ShortSummary()}");
+            ConsoleHelper.PrintInfo("No hay libros en esta categoría.");
         }
-        Console.ResetColor();
-        ConsoleHelper.PressAnyKey();
-    }
-
-    private static void ListBooksAvailable()
-    {
-        ConsoleHelper.PrintAppHeader();
-        var available = _sampleBooks.FindAll(b => b.IsAvailable);
-        ConsoleHelper.PrintSectionHeader("✅", "LIBROS DISPONIBLES", $"Total: {available.Count}");
-        foreach (var book in available)
+        else
         {
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"  {book.ShortSummary()}");
+            foreach (var b in books)
+            {
+                Console.ForegroundColor = color;
+                Console.WriteLine($"  {b.ShortSummary()}");
+            }
+            Console.ResetColor();
         }
-        Console.ResetColor();
-        ConsoleHelper.PressAnyKey();
-    }
-
-    private static void ListBooksBorrowed()
-    {
-        ConsoleHelper.PrintAppHeader();
-        var borrowed = _sampleBooks.FindAll(b => !b.IsAvailable);
-        ConsoleHelper.PrintSectionHeader("🔄", "LIBROS PRESTADOS", $"Total: {borrowed.Count}");
-        foreach (var book in borrowed)
-        {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"  {book.ShortSummary()}");
-        }
-        Console.ResetColor();
         ConsoleHelper.PressAnyKey();
     }
 
@@ -172,10 +164,10 @@ public static class BooksMenu
     {
         ConsoleHelper.PrintAppHeader();
         ConsoleHelper.PrintSectionHeader("🔎", "VER DETALLE DE LIBRO");
-        ConsoleHelper.PrintPrompt("Ingresa el ID del libro");
+        ConsoleHelper.PrintPrompt("Ingresa el ID");
         if (int.TryParse(Console.ReadLine(), out int id))
         {
-            var book = _sampleBooks.Find(b => b.Id == id);
+            var book = _service.FindById(id);
             if (book != null)
             {
                 Console.ForegroundColor = ConsoleColor.Cyan;
@@ -226,7 +218,19 @@ public static class BooksMenu
     {
         ConsoleHelper.PrintAppHeader();
         ConsoleHelper.PrintSectionHeader("📝", "EDITAR TÍTULO");
-        ConsoleHelper.PrintStub("EditBookTitle — Se implementará con Service en EV08");
+        ConsoleHelper.PrintPrompt("ID del libro");
+        if (!int.TryParse(Console.ReadLine(), out int id))
+        {
+            ConsoleHelper.PrintError("ID inválido.");
+            ConsoleHelper.PressAnyKey();
+            return;
+        }
+        ConsoleHelper.PrintPrompt("Nuevo título");
+        string val = Console.ReadLine() ?? "";
+        if (_service.UpdateTitle(id, val))
+            ConsoleHelper.PrintSuccess("Título actualizado.");
+        else
+            ConsoleHelper.PrintError("No se encontró el libro.");
         ConsoleHelper.PressAnyKey();
     }
 
@@ -234,7 +238,19 @@ public static class BooksMenu
     {
         ConsoleHelper.PrintAppHeader();
         ConsoleHelper.PrintSectionHeader("👤", "EDITAR AUTOR");
-        ConsoleHelper.PrintStub("EditBookAuthor — Se implementará con Service en EV08");
+        ConsoleHelper.PrintPrompt("ID del libro");
+        if (!int.TryParse(Console.ReadLine(), out int id))
+        {
+            ConsoleHelper.PrintError("ID inválido.");
+            ConsoleHelper.PressAnyKey();
+            return;
+        }
+        ConsoleHelper.PrintPrompt("Nuevo autor");
+        string val = Console.ReadLine() ?? "";
+        if (_service.UpdateAuthor(id, val))
+            ConsoleHelper.PrintSuccess("Autor actualizado.");
+        else
+            ConsoleHelper.PrintError("No se encontró el libro.");
         ConsoleHelper.PressAnyKey();
     }
 
@@ -242,7 +258,21 @@ public static class BooksMenu
     {
         ConsoleHelper.PrintAppHeader();
         ConsoleHelper.PrintSectionHeader("📅", "EDITAR AÑO / CATEGORÍA");
-        ConsoleHelper.PrintStub("EditBookYearCategory — Se implementará con Service en EV08");
+        ConsoleHelper.PrintPrompt("ID del libro");
+        if (!int.TryParse(Console.ReadLine(), out int id))
+        {
+            ConsoleHelper.PrintError("ID inválido.");
+            ConsoleHelper.PressAnyKey();
+            return;
+        }
+        ConsoleHelper.PrintPrompt("Nuevo año");
+        int.TryParse(Console.ReadLine(), out int year);
+        ConsoleHelper.PrintPrompt("Nueva categoría");
+        string cat = Console.ReadLine() ?? "";
+        if (_service.UpdateYearCategory(id, year, cat))
+            ConsoleHelper.PrintSuccess("Año y categoría actualizados.");
+        else
+            ConsoleHelper.PrintError("No se encontró el libro.");
         ConsoleHelper.PressAnyKey();
     }
 
@@ -250,8 +280,36 @@ public static class BooksMenu
     {
         ConsoleHelper.PrintAppHeader();
         ConsoleHelper.PrintSectionHeader("🗑️", "ELIMINAR LIBRO");
-        ConsoleHelper.PrintStub("DeleteBook — Se implementará con Service en EV08");
-        ConsoleHelper.PrintWarning("Validación: No permitir si tiene préstamo activo.");
+        ConsoleHelper.PrintPrompt("ID del libro a eliminar");
+        if (!int.TryParse(Console.ReadLine(), out int id))
+        {
+            ConsoleHelper.PrintError("ID inválido.");
+            ConsoleHelper.PressAnyKey();
+            return;
+        }
+        var book = _service.FindById(id);
+        if (book == null)
+        {
+            ConsoleHelper.PrintError("Libro no encontrado.");
+            ConsoleHelper.PressAnyKey();
+            return;
+        }
+        if (!book.IsAvailable)
+        {
+            ConsoleHelper.PrintError("No se puede eliminar: el libro está prestado actualmente.");
+            ConsoleHelper.PressAnyKey();
+            return;
+        }
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine(book.FullDetail());
+        Console.ResetColor();
+        if (ConsoleHelper.AskConfirmation("¿Confirmas eliminar este libro?"))
+        {
+            _service.Remove(id);
+            ConsoleHelper.PrintSuccess("Libro eliminado correctamente.");
+        }
+        else
+            ConsoleHelper.PrintInfo("Operación cancelada.");
         ConsoleHelper.PressAnyKey();
     }
 }

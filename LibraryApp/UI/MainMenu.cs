@@ -75,9 +75,7 @@ public static class MainMenu
         ConsoleHelper.PrintSectionHeader("🚪", "SALIR DE LA APLICACIÓN");
         bool save = ConsoleHelper.AskConfirmation("¿Deseas guardar los datos antes de salir?");
         if (save)
-            ConsoleHelper.PrintSuccess(
-                "Datos guardados correctamente. [Stub — se implementa en EV08]"
-            );
+            PersistenceMenu.SaveData();
 
         bool confirm = ConsoleHelper.AskConfirmation("¿Confirmas que deseas salir?");
         if (confirm)
